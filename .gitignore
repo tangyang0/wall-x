@@ -40,3 +40,10 @@ workspace/rtx5090/local/env.sh
 #   wall_x/model/core/ops/csrc/
 #   wall_x/model/core/ops/_cuda_ext.py
 #   wall_x/model/core/ops/_cuda_wrappers.py
+
+# local self-contained resources (added for local deploy)
+/lerobot/
+/checkpoints/
+wall_x/model/core/ops/*.so
+/start_serve.sh
+/logs/
