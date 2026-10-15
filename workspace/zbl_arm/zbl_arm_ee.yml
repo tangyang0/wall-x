@@ -1,0 +1,106 @@
+# zbl 6-axis single-arm finetune config (Wall-OSS-0.5, eye-in-hand wrist camera).
+#
+# Embodiment layout (matches zbl_arm_6a_datacol recordings):
+#   observation.state [10] : ee pos(3) + 6D rotation(6) + gripper(1), absolute, base frame
+#   action          [10]   : same layout, absolute (action[i] == state[i+1])
+#   observation.images.wrist : 640x480 h264, single eye-in-hand camera
+#
+# Strategy: single right-arm ee keys (10 real dims) + action_padding(16) = 26,
+# matching the pretraining action space. The lerobot loader converts absolute
+# actions/states to relative deltas automatically (agent_pos layout mirrors
+# dof_config, so the conversion is well-defined).
+#
+# Target hardware: 8x A100 80GB. Effective batch = 8 * 4 * 2 = 64.
+
+model_type: qwen2_5
+
+task:
+  dof_config:
+    follow_right_ee_cartesian_pos_relative: 3
+    follow_right_ee_rotation_6D_relative: 6
+    follow_right_gripper: 1
+    action_padding: 16
+  ar_dof_config:
+    follow_right_ee_cartesian_pos_relative: 3
+    follow_right_ee_rotation_6D_relative: 6
+    follow_right_gripper: 1
+    action_padding: 16
+  agent_pos_config:
+    follow_right_ee_cartesian_pos: 3
+    follow_right_ee_rotation_6D: 6
+    follow_right_gripper: 1
+    action_padding: 16
+  action_horizon: 32
+  action_horizon_flow: 32
+  use_state_string_representation: false
+
+model:
+  backbone: qwen2_5
+  config_path: /home/tangyang/workspace/wall-x/checkpoints/wall-oss-0.5/config.json
+  processor_path: /home/tangyang/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
+  pretrained_path: /home/tangyang/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
+  attn_deterministic: true
+  use_ema: false
+  flow_loss_weight: 1.0
+  ar_loss_weight: 0.01
+
+hyperparams:
+  num_epoch: 100
+  batch_size_per_gpu: 4
+  gradient_accumulation_steps: 2
+  seed: 10222
+  optimizer:
+    optimizer_type: adamw
+    learning_rate: 5.0e-05
+    max_grad_norm: 1.0
+    enable_grad_clip: true
+    betas: [0.9, 0.95]
+    weight_decay: 1.0e-8
+    eps: 1.0e-8
+  scheduler:
+    scheduler_type: cosine
+    num_warmup_steps: 1000
+    num_training_steps: 200000
+    min_lr: 1.0e-6
+
+distributed:
+  use_fsdp: true
+  use_mixed_precision: true
+  bf16: true
+
+data:
+  dataset_type: lerobot
+  lerobot_config:
+    repo_id: /home/tangyang/workspace/zbl_arm_6a_datacol/data/zbl_data/pick_up_test_tube_No._1_from_the_left_rack_and_place_it_in_the_right_rack
+    root: null
+  key_mappings:
+    camera:
+      observation.images.wrist: right_wrist_view
+    state: observation.state
+    action: action
+  norm_stats_path: /home/tangyang/workspace/zbl_arm_train/norm_stats.json
+  train_test_split: 0.95
+  num_workers: 8
+  max_length: 1024
+  resolution:
+    right_wrist_view: 448
+
+logging:
+  log_name: zbl_arm_ee
+  log_project: zbl_arm_finetune
+  log_entity: ""
+  use_wandb: false
+  log_interval: 10
+  save_interval: 2000
+  val_interval: 1000000
+  epoch_save_interval: 1
+
+checkpoint:
+  save_path: /home/tangyang/workspace/zbl_arm_train/output
+  # Single-file .safetensors loads as pretrain weights before FSDP wrapping.
+  # Use a checkpoint directory for full resume (optimizer / scheduler / RNG).
+  resume_from: /home/tangyang/workspace/wall-x/checkpoints/wall-oss-0.5/model.safetensors
+
+debug:
+  profile: false
+  nvtx: false
