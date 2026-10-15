@@ -86,10 +86,13 @@ data:
     right_wrist_view: 448
 
 logging:
+  # Real-time monitoring: set log_entity to your wandb username/team (empty =
+  # personal default). Auth on the cluster: `wandb login` or WANDB_API_KEY env.
+  # Offline nodes: WANDB_MODE=offline + `wandb sync` after the job.
   log_name: zbl_arm_ee
   log_project: zbl_arm_finetune
   log_entity: ""
-  use_wandb: false
+  use_wandb: true
   log_interval: 10
   save_interval: 2000
   val_interval: 1000000
