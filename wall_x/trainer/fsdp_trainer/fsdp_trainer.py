@@ -887,10 +887,14 @@ class FSDPTrainer(DistributedTrainer):
 
     @staticmethod
     def _ckpt_dir_sort_key(name: str):
-        """Sort key for checkpoint dir names ('epoch' or 'epoch_step'); None if not a checkpoint dir."""
+        """Sort key for checkpoint dir names ('epoch' or 'epoch_step'); None if not a checkpoint dir.
+
+        Epoch-end dirs sort above all mid-epoch saves of the same epoch (they
+        are written last), hence +inf as the step component.
+        """
         parts = name.split("_")
         if len(parts) == 1 and parts[0].isdigit():
-            return (int(parts[0]), 0)
+            return (int(parts[0]), float("inf"))
         if len(parts) == 2 and all(p.isdigit() for p in parts):
             return (int(parts[0]), int(parts[1]))
         return None
