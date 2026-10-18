@@ -47,3 +47,5 @@ workspace/rtx5090/local/env.sh
 wall_x/model/core/ops/*.so
 /start_serve.sh
 /logs/
+data/
+workspace/zbl_arm/launch_secrets.sh

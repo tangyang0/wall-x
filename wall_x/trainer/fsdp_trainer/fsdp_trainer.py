@@ -857,7 +857,8 @@ class FSDPTrainer(DistributedTrainer):
     def save_checkpoint(self, epoch: int, step: int = 0):
         """Save model checkpoint via checkpoint_io (dispatches on model wrapper type)."""
         save_path = self.cfg.checkpoint.save_path
-        ckpt_path = f"{save_path}/{epoch}_{step}" if step else f"{save_path}/{epoch}"
+        ckpt_name = f"{epoch}_{step}" if step else f"{epoch}"
+        ckpt_path = f"{save_path}/{ckpt_name}"
         _ckpt_io.save_checkpoint(
             ckpt_path=ckpt_path,
             model=self.model,
@@ -878,6 +879,57 @@ class FSDPTrainer(DistributedTrainer):
         )
         _ckpt_io.finalize_save()
         self.log(f"Saved checkpoint to {ckpt_path}")
+        self._prune_old_resume_state(save_path)
+
+    # Resume-only state files: stripped from older checkpoints after each save
+    # so only the newest dirs stay exactly-resumable; model + config remain.
+    _RESUME_STATE_FILES = ("optimizer.pt", "scheduler.pt", "rng_state.pt", "grad_scaler.pt")
+
+    @staticmethod
+    def _ckpt_dir_sort_key(name: str):
+        """Sort key for checkpoint dir names ('epoch' or 'epoch_step'); None if not a checkpoint dir."""
+        parts = name.split("_")
+        if len(parts) == 1 and parts[0].isdigit():
+            return (int(parts[0]), 0)
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            return (int(parts[0]), int(parts[1]))
+        return None
+
+    def _prune_old_resume_state(self, save_path: str) -> None:
+        """Delete optimizer/scheduler/RNG state from all but the newest N checkpoints.
+
+        Runs on the main process only, after the new checkpoint is fully
+        written, so a failed save can never destroy the last resumable state.
+        Older dirs keep model.safetensors + config files for eval/deployment.
+        """
+        keep = getattr(self.cfg.checkpoint, "keep_resumable_checkpoints", 1)
+        if not keep or not is_main_process():
+            return
+        try:
+            keyed = []
+            for entry in os.listdir(save_path):
+                key = self._ckpt_dir_sort_key(entry)
+                if key is not None:
+                    keyed.append((key, entry))
+        except OSError as exc:
+            self.log(f"[Checkpoint] Skipping resume-state pruning: {exc}")
+            return
+        keyed.sort(reverse=True)
+        for _, entry in keyed[keep:]:
+            removed = []
+            for fname in self._RESUME_STATE_FILES:
+                fpath = os.path.join(save_path, entry, fname)
+                try:
+                    if os.path.exists(fpath):
+                        os.remove(fpath)
+                        removed.append(fname)
+                except OSError as exc:
+                    self.log(f"[Checkpoint] Failed to prune {fpath}: {exc}")
+            if removed:
+                self.log(
+                    f"[Checkpoint] Pruned resume state {removed} from old "
+                    f"checkpoint {entry} (model kept)"
+                )
 
     def load_state_dict(self, model, resume_config):
         """Load state dict with fused-weight conversion + try_harder support."""

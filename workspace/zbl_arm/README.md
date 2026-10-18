@@ -97,6 +97,9 @@ logging:
 
 ```bash
 wandb login            # 交互式
+export https_proxy="http://<USER>:<TOKEN>@proxy.pjlab.org.cn:23128/"
+export http_proxy="$https_proxy"
+export no_proxy="10.0.0.0/8,100.0.0.0/8,.pjlab.org.cn,127.0.0.1,localhost,::1"
 export WANDB_API_KEY=xxx   # 非交互（推荐写进任务脚本）
 ```
 
@@ -117,13 +120,20 @@ python scripts/compute_norm_stats.py \
 
 ### 2.2 启动命令（网页平台"启动命令"框里填这个）
 
+torchrun 用绝对路径调用，平台 shell 无需 `conda activate`（交互终端里 `conda activate wallx` 后可直接用 `torchrun`）。
+
 **单机 8 卡任务：**
 
 ```bash
-cd /path/to/wall-x && conda activate wallx && \
-WANDB_API_KEY=<你的key> torchrun --nproc_per_node=8 \
+cd /root/workspace/wall-x && \
+export https_proxy="http://<USER>:<TOKEN>@proxy.pjlab.org.cn:23128/" \
+       http_proxy="$https_proxy" \
+       no_proxy="10.0.0.0/8,100.0.0.0/8,.pjlab.org.cn,127.0.0.1,localhost,::1" && \
+WANDB_API_KEY=<你的key> \
+/root/workspace/miniconda3/envs/wallx/bin/torchrun --nproc_per_node=8 \
   wall_x/trainer/fsdp_trainer/train_fsdp.py \
-  --config workspace/zbl_arm/zbl_arm_ee.yml
+  --config workspace/zbl_arm/zbl_arm_ee.yml \
+  --log_to_file
 ```
 
 （平台已自动注入 `CUDA_VISIBLE_DEVICES` 时不用手动设；没注入就前置 `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7`。）
@@ -133,25 +143,35 @@ WANDB_API_KEY=<你的key> torchrun --nproc_per_node=8 \
 方式 A——平台注入标准环境变量（`MASTER_ADDR` / `MASTER_PORT` / `NODE_RANK` / `NNODES`，多数平台是这个模式，变量名以平台文档为准）：
 
 ```bash
-cd /path/to/wall-x && conda activate wallx && \
-WANDB_API_KEY=<你的key> torchrun \
+cd /root/workspace/wall-x && \
+export https_proxy="http://<USER>:<TOKEN>@proxy.pjlab.org.cn:23128/" \
+       http_proxy="$https_proxy" \
+       no_proxy="10.0.0.0/8,100.0.0.0/8,.pjlab.org.cn,127.0.0.1,localhost,::1" && \
+WANDB_API_KEY=<你的key> \
+/root/workspace/miniconda3/envs/wallx/bin/torchrun \
   --nnodes=$NNODES --nproc_per_node=8 --node_rank=$NODE_RANK \
   --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT \
   wall_x/trainer/fsdp_trainer/train_fsdp.py \
-  --config workspace/zbl_arm/zbl_arm_ee.yml
+  --config workspace/zbl_arm/zbl_arm_ee.yml \
+  --log_to_file
 ```
 
 方式 B——平台只给裸节点（自己用主节点 IP 组网；所有节点同一份代码和配置，仅 `--node_rank` 不同）：
 
 ```bash
 # 节点 0（主节点，<MASTER_IP> 换成该机在集群内网的 IP）
-cd /path/to/wall-x && conda activate wallx && \
-WANDB_API_KEY=<你的key> torchrun \
+cd /root/workspace/wall-x && \
+export https_proxy="http://<USER>:<TOKEN>@proxy.pjlab.org.cn:23128/" \
+       http_proxy="$https_proxy" \
+       no_proxy="10.0.0.0/8,100.0.0.0/8,.pjlab.org.cn,127.0.0.1,localhost,::1" && \
+WANDB_API_KEY=<你的key> \
+/root/workspace/miniconda3/envs/wallx/bin/torchrun \
   --nnodes=2 --nproc_per_node=8 --node_rank=0 \
   --rdzv_backend=c10d --rdzv_endpoint=<MASTER_IP>:29500 \
   --rdzv_id=zbl-arm-ee \
   wall_x/trainer/fsdp_trainer/train_fsdp.py \
-  --config workspace/zbl_arm/zbl_arm_ee.yml
+  --config workspace/zbl_arm/zbl_arm_ee.yml \
+  --log_to_file
 
 # 节点 1：其余完全相同，仅 --node_rank=1
 ```
@@ -169,6 +189,9 @@ WANDB_API_KEY=<你的key> torchrun \
 #SBATCH --cpus-per-task=16
 #SBATCH --output=logs/%x-%j.log
 
+export https_proxy="http://<USER>:<TOKEN>@proxy.pjlab.org.cn:23128/"
+export http_proxy="$https_proxy"
+export no_proxy="10.0.0.0/8,100.0.0.0/8,.pjlab.org.cn,127.0.0.1,localhost,::1"
 export WANDB_API_KEY=xxx
 MASTER_IP=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 NODE_RANK=$((SLURM_NODEID))
@@ -178,7 +201,8 @@ torchrun \
   --rdzv_backend=c10d --rdzv_endpoint="$MASTER_IP":29500 \
   --rdzv_id="zbl-arm-$SLURM_JOB_ID" \
   wall_x/trainer/fsdp_trainer/train_fsdp.py \
-  --config workspace/zbl_arm/zbl_arm_ee.yml
+  --config workspace/zbl_arm/zbl_arm_ee.yml \
+  --log_to_file
 ```
 
 ### 2.3 训练中
@@ -193,10 +217,10 @@ torchrun \
 集群开发机（login 节点）一般没有 GPU：在网页平台**起一个 1 卡任务**跑冒烟，"启动命令"填：
 
 ```bash
-cd /path/to/wall-x && conda activate wallx && \
-torchrun --nproc_per_node=1 \
+cd /root/workspace/wall-x && \
+/root/workspace/miniconda3/envs/wallx/bin/torchrun --nproc_per_node=1 \
   wall_x/trainer/fsdp_trainer/train_fsdp.py \
-  --config workspace/zbl_arm/zbl_arm_ee_smoke.yml
+  --config workspace/zbl_arm/zbl_arm_ee_smoke.yml --log_to_file
 ```
 
 （冒烟配置 `zbl_arm_ee_smoke.yml` 同样按 §1.4 改路径；单条数据需 `train_test_split: 1.0`。）

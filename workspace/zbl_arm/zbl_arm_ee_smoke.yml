@@ -27,9 +27,9 @@ task:
 
 model:
   backbone: qwen2_5
-  config_path: /home/tangyang/workspace/wall-x/checkpoints/wall-oss-0.5/config.json
-  processor_path: /home/tangyang/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
-  pretrained_path: /home/tangyang/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
+  config_path: /root/workspace/wall-x/checkpoints/wall-oss-0.5/config.json
+  processor_path: /root/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
+  pretrained_path: /root/workspace/wall-x/checkpoints/Qwen2.5-VL-3B-Instruct
   attn_deterministic: true
   use_ema: false
   flow_loss_weight: 1.0
@@ -62,14 +62,14 @@ distributed:
 data:
   dataset_type: lerobot
   lerobot_config:
-    repo_id: /home/tangyang/workspace/zbl_arm_6a_datacol/data/zbl_data/pick_up_test_tube_No._1_from_the_left_rack_and_place_it_in_the_right_rack
+    repo_id: /root/workspace/wall-x/data/zbl_data/pick_up_test_tube_No_1_from_the_left_rack_and_place_it_in_the_right_rack
     root: null
   key_mappings:
     camera:
       observation.images.wrist: right_wrist_view
     state: observation.state
     action: action
-  norm_stats_path: /home/tangyang/workspace/zbl_arm_train/norm_stats.json
+  norm_stats_path: /root/workspace/wall-x/data/norm_stats.json
   # floor(1 episode * 0.95) == 0 train episodes; use 1.0 for the single-episode
   # smoke run. Restore 0.95 once the dataset has a few dozen episodes.
   train_test_split: 1.0
@@ -89,8 +89,8 @@ logging:
   epoch_save_interval: 1
 
 checkpoint:
-  save_path: /home/tangyang/workspace/zbl_arm_train/output_smoke
-  resume_from: /home/tangyang/workspace/wall-x/checkpoints/wall-oss-0.5/model.safetensors
+  save_path: /root/workspace/wall-x/output_smoke
+  resume_from: /root/workspace/wall-x/checkpoints/wall-oss-0.5/model.safetensors
 
 debug:
   profile: false

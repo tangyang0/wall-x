@@ -72,6 +72,10 @@ class CheckpointConfig:
     resume_rng: Optional[str] = None
     resume_data: Optional[str] = None
     resume_step: Optional[str] = None
+    # Newest N checkpoint dirs that keep optimizer/scheduler/RNG state for exact
+    # resume; older dirs are stripped to model + config files after each save.
+    # 0 keeps resume state in every checkpoint (previous behaviour).
+    keep_resumable_checkpoints: int = 1
 
     def get_resume_path(self, component: str) -> Optional[str]:
         """Return the resume path for one checkpoint component."""
