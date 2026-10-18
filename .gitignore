@@ -49,3 +49,4 @@ wall_x/model/core/ops/*.so
 /logs/
 data/
 workspace/zbl_arm/launch_secrets.sh
+wheels/
