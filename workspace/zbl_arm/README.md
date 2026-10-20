@@ -227,7 +227,58 @@ cd /root/workspace/wall-x && \
 
 ---
 
-## 3. 推理与开环评测（验证训练效果）
+## 3. 部署完整流程（微调 checkpoint → 真机闭环）
+
+按顺序执行，全部命令已在本机验证通过：
+
+**第 1 步 起推理服务（宿主机，GPU0）**
+
+```bash
+cd /home/tangyang/workspace/wall-x-dev-ty_arm
+PATH=/home/tangyang/miniconda3/envs/wallx/bin:$PATH \
+bash scripts/run_serving.sh \
+  --checkpoint-path logs/32 \
+  --train-config-path workspace/zbl_arm/zbl_arm_ee.yml \
+  --cuda-id 0 --port 32195
+```
+
+注意 `run_serving.sh` 必须用 wallx 环境的 PATH 启动（系统 python 缺 yaml）。
+换新 checkpoint 只需改 `--checkpoint-path` 重启。
+
+**第 2 步 开环验证（可选但建议，不开真机）**
+
+```bash
+cd /home/tangyang/workspace/wall-x-dev-ty_arm
+/home/tangyang/miniconda3/envs/wallx/bin/python scripts/draw_openloop_plot.py \
+  --uri ws://127.0.0.1:32195 \
+  --dataset-root /home/tangyang/workspace/zbl_arm_6a_datacol/data/zbl_data/pick_up_test_tube_No_1_from_the_left_rack_and_place_it_in_the_right_rack \
+  --train-config workspace/zbl_arm/zbl_arm_ee.yml \
+  --episode-indices 0
+```
+
+逐维误差对照"零基线"看（详见对话记录的方法论），平移维从基线分离才算学会搬运。
+
+**第 3 步 真机闭环（容器内，机械臂/相机按遥操同样流程先启动）**
+
+```bash
+docker exec -it zbl_arm_6a_sdk bash
+source /opt/ros/jazzy/setup.bash && source /opt/xr/core/install/setup.bash
+python3 /home/xr/workspace/wall-x/workspace/zbl_arm/arm_client.py \
+  --task "pick up test tube No. 1 from the left rack and place it in the right rack" \
+  --steps 0 --execute --chunk-steps 32
+```
+
+执行生命周期：启动打印版本指纹（对版本用）→ 立即匀速归零 → 人工确认门(Enter)→
+切笛卡尔控制器 → 策略执行（每块 32 步, 单步限幅 0.8cm/0.08rad, 目标跳变拒绝,
+工作空间盒含桌面下限）→ 结束/Ctrl+C/突变终止 → 关节伺服锁定 → 结束后回零。
+
+客户端源码在本仓库 `workspace/zbl_arm/arm_client.py`（容器内副本经 docker cp 同步,
+以日志版本指纹核对）；先 `--dry-run` 只打印不动臂。协议与安全机制详见
+`CLIENT_DESIGN.md`。
+
+### 开环评测与原图（历史参考）
+
+
 
 ```bash
 bash scripts/run_serving.sh \
@@ -245,6 +296,19 @@ python scripts/draw_openloop_plot.py \
 
 单臂部署用 `--no-serialize-actions`（原始 32×26 chunk，前 10 维为
 [pos3, rot6d, gripper]，后 16 维 padding 忽略），由单臂客户端切片下发。
+
+### 真机闭环客户端（容器内运行）
+
+```bash
+docker exec -it zbl_arm_6a_sdk bash
+source /opt/ros/jazzy/setup.bash && source /opt/xr/core/install/setup.bash
+python3 /home/xr/workspace/wall-x/workspace/zbl_arm/arm_client.py \
+  --task "pick up test tube No. 1 from the left rack and place it in the right rack" \
+  --steps 0 --execute --chunk-steps 32
+```
+
+源码在仓库 `workspace/zbl_arm/arm_client.py`；`--dry-run` 只打印不动臂。详见
+`CLIENT_DESIGN.md`（协议约定、安全机制、参数表）。
 
 ---
 

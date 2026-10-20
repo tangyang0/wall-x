@@ -300,6 +300,21 @@ def build_state_payload(
             "follow1_pos": state_vec[:7].tolist(),
             "follow2_pos": state_vec[7:14].tolist(),
         }
+    if state_vec.shape[0] == 10:
+        # Single-arm ee layout [pos3, rot6d, grip1]: the server's follow2_pos
+        # schema is [pos3, euler_rpy3, grip1] and rebuilds 6D from euler, so
+        # convert before sending (avoids feeding zeros/garbage proprio).
+        from scipy.spatial.transform import Rotation as _Rot
+        r1 = state_vec[3:6]
+        r2 = state_vec[6:9]
+        r3 = np.cross(r1, r2)
+        R = np.vstack([r1, r2, r3])
+        rpy = _Rot.from_matrix(R).as_euler("XYZ")
+        return {
+            "follow2_pos": np.concatenate([state_vec[:3], rpy, state_vec[9:10]])
+            .astype(np.float32)
+            .tolist()
+        }
     if state_vec.shape[0] >= 7:
         return {"follow2_pos": state_vec.tolist()}
 
